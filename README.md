@@ -1,6 +1,8 @@
 # gmxpbsa
 MM/PBSA binding free energy calculation
-MM/PBSA binding free energy calculation ################ INSTALLATION ###################
+MM/PBSA binding free energy calculation 
+
+################ INSTALLATION ###################
 
 The user can extract the source code in some location, i.e. /home/myprogram/, by typing
 
