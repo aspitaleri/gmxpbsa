@@ -1,0 +1,222 @@
+#CHECK
+function check {
+ outfile=$2
+ if [ ! -e $1 ]; then 
+  echo -e "\n"$(date +%H:%M:%S)" \n ERROR: I could not find $1 in "$(pwd)". Exiting... \n" | tee -a $outfile
+  #clear; 
+  echo "Exiting -- please read the $outfile" 
+  exit
+ fi
+}
+
+function check2 {
+ outfile=$2
+ if [ ! -e $1 ]; then 
+  echo -e "\n"$(date +%H:%M:%S)" \n ERROR: I could not find $1 in "$(pwd)". Exiting... \n" | tee -a  $outfile
+  #clear; 
+  echo "Exiting -- please read the $outfile and $(pwd)/STD_ERR0" 
+  exit
+ fi
+}
+
+function check_minN {
+ outfile=$2
+ local _coul=$3
+ local _use=$4
+ if [ ! -e $1 ]; then 
+  echo -e "\n"$(date +%H:%M:%S)" \nERROR: I could not find $1 in "$(pwd)".\nSetting the option \"coulomb\" to \"gmx\". If you want to use \"coulomb=coul\" please provide the right files to GMXPBSA.\n" | tee -a  $outfile
+ eval $_coul="gmx";
+ eval $_use="n";
+ fi
+}
+
+function check_minY {
+ outfile=$2
+ local _coul=$3
+ local _use=$4
+ local _min=$5
+ if [ ! -e $1 ]; then 
+  echo -e "\n"$(date +%H:%M:%S)" \nERROR: I could not find $1 in "$(pwd)".\nSetting the option \"min\" to \"n\" and the option \"coulomb\" to \"gmx\". If you want to use \"min=y\" please provide the right files to GMXPBSA.\n" | tee -a  $outfile
+ eval $_coul="gmx";
+ eval $_use="n";
+ eval $_min="n";
+ fi
+}
+
+
+function check_run {
+	if [ -d  $1 ]; then
+		echo  -e "\n"$(date +%H:%M:%S)"\n The directory $1 is already present in "$(pwd)". Please remove it or choose an appropriate value for the variable \"run\" in the INPUT.dat file.\n" | tee -a REPORTFILE0;
+		echo "Exiting -- please read the REPORTFILE0"
+ 		exit
+	fi	
+}
+
+function check_DIR {
+	if ! [ -d  $1 ]; then
+		echo -e "The Folder $1 that you indicated in the INPUT.dat file does not exist.\nExiting...."| tee -a REPORTFILE0;
+	exit
+	fi
+}
+
+function check_NOdir {
+	if [ -d  $1 ]; then
+		echo  -e "\n"$(date +%H:%M:%S)"\nYou choose \"ff_modified=n\", then please remove or displace (in each MD* directoy) the directory \"*.ff\" \n" | tee -a REPORTFILE0;
+		echo "Exiting -- please read the REPORTFILE0"
+ 		exit
+	fi	
+}
+
+
+#SET VARIABLE
+function set_variable {
+	local _Var=$1
+	local myVar=$(awk -v Var=$_Var '{ if($1==Var) print $2}' INPUT.dat);
+	eval $_Var="'$myVar'"
+	if [ -z "$myVar" ]; then echo -e "$1 variable is unset!!! "; exit; fi
+	control=`echo $myVar | awk '{N=split($0,v," "); print N}'`
+	if [ $control -gt 1 ]; then echo -e "$1 variable was set two times!!! "; exit; fi
+}
+
+function set_variable_multiple {
+	local _Var=$1
+	local fields=$(awk -v Var=$_Var '{ if($1==Var) print NF}' INPUT.dat);
+	local myVar=$(awk -v Var=$_Var -v Fields=$fields '{ if($1==Var) for (i=2;i<=Fields;i++) print $i}' INPUT.dat);
+	eval $_Var="'$myVar'"
+	if [ -z "$myVar" ]; then echo -e "$1 variable is unset!!! "; exit; fi
+}
+function set_variable_multiple_default {
+	local _Var=$1
+	local fields=$(awk -v Var=$_Var '{ if($1==Var) print NF}' INPUT.dat);
+	local myVar=$(awk -v Var=$_Var -v Fields=$fields '{ if($1==Var) for (i=2;i<=Fields;i++) print $i}' INPUT.dat);
+	eval $_Var="'$myVar'"
+	if [ -z "$myVar" ]; then eval $_Var="'$2'"; fi
+}
+
+function set_variable_default {
+	local _Var=$1
+	local myVar=$(awk -v Var=$_Var '{ if($1==Var) print $2}' INPUT.dat);
+	eval $_Var="'$myVar'"
+	if [ -z "$myVar" ]; then eval $_Var="'$2'"; echo -e "Setting variable $1 to the default value $2" | tee -a REPORTFILE0; fi
+	control=`echo $myVar | awk '{N=split($0,v," "); print N}'`
+	if [ $control -gt 1 ]; then echo -e "$1 variable was set two times!!! "; exit; fi
+}
+
+function set_variable_default2 {
+	local _Var=$1
+	local myVar=$(awk -v Var=$_Var '{ if($1==Var) print $2}' INPUT.dat);
+	eval $_Var="'$myVar'"
+	if [ -z "$myVar" ]; then eval $_Var="'$2'"; fi
+	control=`echo $myVar | awk '{N=split($0,v," "); print N}'`
+	if [ $control -gt 1 ]; then echo -e "$1 variable was set two times!!! "; exit; fi
+}
+
+function set_variable_default1 {
+	local _Var=$1
+        outfile=$3
+	local myVar=$(awk -v Var=$_Var '{ if($1==Var) print $2}' INPUT.dat);
+	eval $_Var="'$myVar'"
+	if [ -z "$myVar" ]; then eval $_Var="'$2'"; echo -e "Setting variable $1 to the default value $2" | tee -a $outfile; fi
+	control=`echo $myVar | awk '{N=split($0,v," "); print N}'`
+	if [ $control -gt 1 ]; then echo -e "$1 variable was set two times!!! "; exit; fi
+}
+function set_variable_default_run {
+	local _Var=$1
+	local myVar=$(awk -v Var=$_Var '{ if($1==Var) print $2}' INPUT.dat);
+	eval $_Var="'$myVar'"
+	if [ -z "$myVar" ]; then eval $_Var="'$2'"; echo -e "Setting variable $1 to the default value $2\n"; fi
+	control=`echo $myVar | awk '{N=split($0,v," "); print N}'`
+	if [ $control -gt 1 ]; then echo -e "$1 variable was set two times!!! "; exit; fi
+}
+
+#UPDATE
+function Update {
+	local _counter=$1
+	#let "picO=($_counter%23)";
+	#if [ $picO -eq 0 ]; then
+		 sleep 1
+		echo -ne  $(date +%H:%M:%S)" Done the "$_counter"-th structure in "$(pwd)"..."\\r 
+	#fi
+}
+
+
+#AVERAGE
+function Average {
+	file_input=$1
+	col=$2
+	name=$3
+	local _av=$4
+
+	awk 'BEGIN{
+		tot=0; dev=0; count=0; av=0; 	
+	}
+	{
+		tot=tot+$col;
+		v[count]=$col;
+		count=count+1;
+	}
+	END{
+		av=tot/count;
+		for(i=0;i<count;i++) dev=dev+(v[i]-av)*(v[i]-av);
+		dev=sqrt(dev/count);
+		err=dev/sqrt(count);	
+		printf "%-23s \t=\t %-6.3f    +/-    %-4.3f   kJ/mol \n", name, av, err >> "Complete.val"
+		for(i=0;i<count;i++) var[i]=sqrt((v[i]-av)*(v[i]-av));
+		for(i=0;i<count;i++) { if(var[i]>2*dev)	printf "\nFRAME "i" WARNING!! The difference between the value \""name"\" of frame "i" and the relative average is greater then 2-sigma (2 times the std deviation). Consider the hypothesis to exclude this frame from the calculations!\n\n" >> "WARNINGS.dat"}
+	}' col=$col name="${name}" $file_input
+ 	av=` awk '{tot=tot+$col;count=count+1;};END{av=tot/count; printf av}' col=$col name="${name}" $file_input`
+	eval $_av="'$av'"
+
+	}
+
+function Average_No_Outliers {
+	file_input=$1
+	col=$2
+	name=$3
+	local _av=$4
+
+	AV=`awk -v OUT="$5" 'BEGIN{
+		tot=0; dev=0; count=1; av=0; count_out=1;frame=0; 
+		N_out=split(OUT,out," ")	
+	}
+	{
+		if(count==out[count_out]){
+			count_out=count_out+1;
+		}
+		else{
+			tot=tot+$col;
+			v[frame]=$col;
+			frame=frame+1;
+		}
+		count=count+1;
+	}
+	END{
+		av=tot/frame;
+		for(i=0;i<frame;i++) dev=dev+(v[i]-av)*(v[i]-av);
+		dev=sqrt(dev/frame);
+		err=dev/sqrt(frame);
+		printf "%-23s \t=\t %-6.3f    +/-    %-4.3f   kJ/mol \n", name, av, err >> "Complete_No_Outliers.val";
+		printf av;
+	}' col=$col name="${name}" $file_input`
+
+	eval $_av="'$AV'"
+
+	}
+
+# CONTROL
+function Control_REPfile {
+	find=$1
+	i=$2
+	local exclude=$3
+
+	if [ "$(grep "$find" stru"$i".rep |  wc | awk '{print $1}')" -gt "1" ]; then
+		echo -e "\nERROR!\nTher is more then one value for "$find" in "$i"-th frame\nEXITING...."| tee -a ../../REPORTFILE2;
+		exit 
+	fi
+	if [ "$(grep "$find" stru"$i".rep |  wc | awk '{print $1}')" -lt "1" ]; then
+		echo -e "Structures "$i" will be excluded since "$find" value is not available"| tee -a ../../REPORTFILE2;
+		eval $exclude="'1'"
+	fi
+
+
+}

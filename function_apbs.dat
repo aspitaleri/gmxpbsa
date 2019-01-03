@@ -1,0 +1,77 @@
+############################
+#GRID Generation
+############################
+
+function Calculate_GRID {
+	file_min=$1
+	file_max=$2
+	local _Up=$3
+	local _Lo=$4
+	local _uP=$5
+	local _lO=$6
+	local _LEn=$7
+	local _LeN=$8
+	local _CeN=$9
+	local _up=${10}
+	local _lo=${11}
+	local _Grid=${12}
+	local precF=${13}
+	local _extraspace=${14}
+	local _coarsefactor=${15}
+	local _gridspacing=${16}
+
+	# highest and lowest values among the highest and lowest values 
+	Up=$(sort -g $file_max | tail -n 1)
+	Lo=$(sort -g $file_min | head -n 1)
+	#..some extra-space is added for the fine grid: psize.py adds 20 A - this program adds 10 A twice
+	uP=$(echo "u=$Up; e=$_extraspace; u+e" | bc -l)
+	lO=$(echo "l=$Lo; e=$_extraspace; l-e" | bc -l)
+	#lengths of the sides of the fine grid
+	LEn=$(echo "u=$uP; l=$lO; u-l" | bc -l)
+	#lengths of the sides of the coarse grid
+	LeN=$(echo "u=$LEn; l=$_coarsefactor; u*l" | bc -l)
+	# The center of the grid is positioned in the mean of the original maximal and minimal values. It is not the baricenter of the 
+	 # complex atoms but we do not care, since it has been calculated from the extreme values, we assume it to be internal to the complex!
+	CeN=$(echo "u=$Up; l=$Lo; (u+l)/2" | bc -l)
+	# The extreme values for the coarse grid 
+	up=$( echo "$CeN+($LeN/2)" | bc -l)
+	lo=$( echo "$CeN-($LeN/2)" | bc -l)
+	
+
+
+	# The number of the grid points is calculated according to the length of the fine grid. Considering that the grid spacing should 
+ 	# not exceed 0.5 or 0.25 A, a value which is little more than a quarter of the fine grid lengths is then calculated.
+	# (l*2) if you want it to be <0.5 A; (l*4) if you want it to be <0.25 A (but in this way you could required too much memory)
+
+	# Assuming that nlev=4, the calculation to be performed is n=c*2^(nlev+1)+1, where c is an integer.
+	# ... (FYI whose first 50 values are following: 33 65 97 129 161 193 225 257 289 321 353 385 417 449 481 513 545 
+	# 577 609 641 673 705 737 769 801 833 865 897 929 961 993 1025 1057 1089 1121 1153 1185 1217 1249 1281 1313 1345 
+	# 1377 1409 1441 1473 1505 1537 1569 1601 1633)...
+
+	gRID=$(b=`echo "l=$LEn; g=$_gridspacing; (l/g)+1"|bc -l`; echo  ${b/.*})
+
+	# The value of XGrid is calculated...
+	
+	countV=1; NoP=$(echo "$countV*2^(5)+1" | bc)
+	while [ $NoP -le $gRID ]; do 
+		 let "countV=$countV+1"; NoP=$(echo "$countV*2^(5)+1" | bc); 
+	done 
+
+	# ... and some extra grid points are added, depending on the precF value.
+
+	let "countV=$countV+$precF"; NoP=$(echo "$countV*2^(5)+1" | bc); let "Grid=$NoP"
+
+
+	eval $_Up="'$Up'"
+	eval $_Lo="'$Lo'"
+	eval $_uP="'$uP'"
+	eval $_lO="'$lO'"
+	eval $_LEn="'$LEn'"
+	eval $_LeN="'$LeN'"
+	eval $_CeN="'$CeN'"
+	eval $_up="'$up'"
+	eval $_lo="'$lo'"
+	eval $_Grid="'$Grid'"
+
+}
+

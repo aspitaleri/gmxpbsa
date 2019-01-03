@@ -1,0 +1,461 @@
+#TOPOLOGY
+function read_topology {
+	local _itp=$1
+
+	local itp=$(awk -v Var=$_itp '{ if($1==Var) print $2}' INPUT.dat);
+
+	eval $_itp="'$itp'"
+
+	if [ -z "$itp" ]; then echo -e "$1 variable is unset!!! "; exit; fi
+	control=`echo $itp | awk '{N=split($0,v," "); print N}'`
+	if [ $control -gt 1 ]; then echo -e "\n WARNING!! Multiple files are assigned to the $1 variable. It is ok if there are more files describing the topology of the protein \n" | tee -a REPORTFILE0; fi
+}
+
+
+
+function read_topology2 {
+	local _itp=$1
+	local _itpcheck=$2
+
+	local itp=$(awk -v Var=$_itp '{ if($1==Var) print $2}' INPUT.dat);
+
+	eval $_itp="'$itp'";
+
+	if [ -z "$itp" ]; then 
+		eval $_itpcheck="'NO'";
+	else
+		control=`echo $itp | awk '{N=split($0,v," "); print N}'`;
+		if [ $control -gt 1 ]; then echo -e "\n WARNING!! Multiple files are assigned to the $1 variable. It is ok if there are more files describing the topology of the protein \n" | tee -a REPORTFILE0; fi
+		eval $_itpcheck="'OK'";
+	fi
+}
+
+
+
+function topology {
+	
+	local _fileProt=$1
+	local _fileLig=$2
+	local _nameProt=$3
+	local _nameLig=$4
+	local _nameComp=$5
+	local wat_mol=$6
+
+	#create topology file for protein, ligand and complex. For each one this function is going to delete  
+	cp topol.top topol_$_nameComp.top; cp topol.top topol_$_nameProt.top; cp topol.top topol_$_nameLig.top
+	
+	#read the protein_itp stuff. It is possible to have more then one protein itp file (e.g. if there are more chains)
+	#find the number and name of the itp protein files.
+	N_ProtFiles=`echo $_fileProt | awk '{N=split($0,ProtFiles," "); print N}'`
+	P=`echo $_fileProt | awk '{N=split($0,v," ");  for(i=1;i<=N;i++) printf v[i]"\t"}'`
+	# for each protein.itp
+	for((i=1;i<=$N_ProtFiles; i++))
+	do
+		#read name and lines indicating the protein under the [moleculetype] section.
+		ProtFiles[$i]=$( echo -e $P| awk -v count=$i '{print $count}')
+		nr_prot[$i]=$( echo $(( $(grep -n "moleculetype" ${ProtFiles[$i]} | cut -d: -f1 ) + 2 )))
+		keywordProt[$i]=$( echo $( sed -n ${nr_prot[$i]}'p' ${ProtFiles[$i]} |awk '{print $1}' ) )
+	done
+
+	#read the ligand_itp stuff 
+	##read name and lines indicating the ligand under the [moleculetype] section.
+	nr_lig=$( echo $(( $(grep -n "moleculetype" $_fileLig | cut -d: -f1 ) + 2 )))
+	keywordLig=$( echo $(sed -n $nr_lig'p' $_fileLig | awk '{print $1}') )
+
+	#read the section [molecules] of the files *.top. 
+	nr=$( echo $(( $(grep -n "\[\ molecules\ \]" topol_$_nameComp.top | cut -d: -f1 )  )))
+	max_r=$( wc -l  topol_$_nameComp.top | awk '{print $1}')	
+	
+	for((i=$nr+1; i<=$max_r; i++)); do
+		keyword=$( echo $( sed -n $i'p' topol_$_nameComp.top |awk '{print $1}' ) )
+		for((j=1;j<=$N_ProtFiles;j++))
+			do
+				#if [ "$keyword" == "${keywordProt[$j]}" ]
+				if [ `echo $keyword | tr [:upper:] [:lower:]` = `echo ${keywordProt[$j]} | tr [:upper:] [:lower:]` ]
+				then
+					sed -i -e $i's/'$keyword'/prot@@@'$keyword'/g' topol_$_nameComp.top
+					sed -i -e $i's/'$keyword'/prot@@@'$keyword'/g' topol_$_nameProt.top
+					sed -i -e $i's/'$keyword'/prot@@@'$keyword'/g' topol_$_nameLig.top
+				fi
+			done
+	done
+
+	#adds ';' in front to the molculetype's keywords that are useless in each file
+	for((i=$nr+1; i<=$max_r; i++)); do
+		keyword=$( echo $( sed -n $i'p' topol_$_nameComp.top |awk '{print $1}' ) )
+		if [[ "$keyword" == [* ]]
+		then
+			break
+		fi
+		
+		if [ "$keyword" ]
+		then	
+			if [[ "$keyword" != prot@@@* ]]
+			then
+				if [ "$keyword" == SOL ]; then
+					if [ ${wat_mol} -gt 0 ]; then
+						sed -i -e $i's/.*SOL.*/SOL      '${wat_mol}'/g' topol_$_nameProt.top
+						sed -i -e $i's/.*SOL.*/SOL      '${wat_mol}'/g' topol_$_nameComp.top
+					else
+						sed -i -e $i's/'$keyword'/\;'$keyword'/g' topol_$_nameProt.top
+						sed -i -e $i's/'$keyword'/\;'$keyword'/g' topol_$_nameComp.top 		
+					fi
+				else
+					sed -i -e $i's/'$keyword'/\;'$keyword'/g' topol_$_nameProt.top 				
+					#if [ "$keyword" != "$keywordLig" ]
+					if [ `echo $keyword | tr [:upper:] [:lower:]` != `echo $keywordLig | tr [:upper:] [:lower:]` ]
+					then
+						sed -i -e $i's/'$keyword'/\;'$keyword'/g' topol_$_nameComp.top
+					fi
+				fi
+			fi
+
+			#if [ "$keyword" != "$keywordLig" ]
+			if [ `echo $keyword | tr [:upper:] [:lower:]` != `echo $keywordLig | tr [:upper:] [:lower:]` ]
+			then
+				sed -i -e $i's/'$keyword'/\;'$keyword'/g' topol_$_nameLig.top
+			fi
+
+			
+		else
+			continue
+		fi
+	done
+
+	sed -i -e 's/prot@@@/''/g' topol_$_nameComp.top
+	sed -i -e 's/prot@@@/''/g' topol_$_nameProt.top
+	sed -i -e 's/prot@@@/''/g' topol_$_nameLig.top
+
+}
+
+
+
+function topology2 {
+	
+	local _fileProt=$1
+	local _nameComp=$2
+
+	#create topology file for protein, ligand and complex. For each one this function is going to delete  
+	cp topol.top topol_$_nameComp.top; 
+	
+	#read the protein_itp stuff. It is possible to have more then one protein itp file (e.g. if there are more chains)
+	N_ProtFiles=`echo $_fileProt | awk '{N=split($0,ProtFiles," "); print N}'`
+	P=`echo $_fileProt | awk '{N=split($0,v," ");  for(i=1;i<=N;i++) printf v[i]"\t"}'`
+	for((i=1;i<=$N_ProtFiles; i++))
+	do
+		ProtFiles[$i]=$( echo -e $P| awk -v count=$i '{print $count}')
+		nr_prot[$i]=$( echo $(( $(grep -n "moleculetype" ${ProtFiles[$i]} | cut -d: -f1 ) + 2 )))
+		keywordProt[$i]=$( echo $( sed -n ${nr_prot[$i]}'p' ${ProtFiles[$i]} |awk '{print $1}' ) )
+	done
+
+	#read the section [molecules] of the files *.top. 
+	nr=$( echo $(( $(grep -n "\[\ molecules\ \]" topol_$_nameComp.top | cut -d: -f1 )  )))
+	max_r=$( wc -l  topol_$_nameComp.top | awk '{print $1}')	
+	
+	for((i=$nr+1; i<=$max_r; i++)); do
+		keyword=$( echo $( sed -n $i'p' topol_$_nameComp.top |awk '{print $1}' ) )
+			for((j=1;j<=$N_ProtFiles;j++))
+			do
+				#if [ "$keyword" == "${keywordProt[$j]}" ]
+				if [ `echo $keyword | tr [:upper:] [:lower:]` = `echo ${keywordProt[$j]} | tr [:upper:] [:lower:]` ]
+				then
+					sed -i -e $i's/'$keyword'/prot@@@'$keyword'/g' topol_$_nameComp.top
+				fi
+			done
+	done
+
+	#adds ';' in front to the molculetype's keywords that are useless in each file
+	for((i=$nr+1; i<=$max_r; i++)); do
+		keyword=$( echo $( sed -n $i'p' topol_$_nameComp.top |awk '{print $1}' ) )
+		if [[ "$keyword" == [* ]]
+		then
+			break
+		fi
+		
+		if [ "$keyword" ]
+		then	
+			if [[ "$keyword" != prot@@@* ]]
+			then
+				sed -i -e $i's/'$keyword'/\;'$keyword'/g' topol_$_nameComp.top			
+			fi
+		else
+			continue
+		fi
+	done
+
+	sed -i -e 's/prot@@@/''/g' topol_$_nameComp.top
+
+}
+
+
+
+#EM
+
+function EnergyMin_n {
+	local _name=$1
+	local _count=$2
+	local _Gpath=$3
+	local _ffield=$4
+	local _topology=$5
+	local _usetpbcon=$6
+	local _editconf="$7"
+	local _pdb2gmx="$8"
+	local _grompp="$9"
+	local _mdrun="${10}"
+
+	name=`echo $_name$_count`
+		
+	if [ $_topology == "y" ]; then
+		$_Gpath\/$_editconf -f _$name.pdb -o _$name.gro >>STD_ERR0 2>&1
+	else
+		echo "$_ffield" | $Gpath\/$_pdb2gmx -f _$name.pdb -p topol_$_name.top -i posre_$_name.itp -o _$name.gro -ignh -water tip3p >>STD_ERR0 2>&1
+	fi
+
+	check2 _$name.gro ../REPORTFILE0 && $_Gpath\/$_grompp -f Mm.mdp -c _$name.gro -p topol_$_name.top -o $name.tpr >>STD_ERR0 2>&1 && check2 $name.tpr 
+
+	if [ $_usetpbcon == "y" ]; then
+		check2 $_name.tpr ../REPORTFILE0 && $_Gpath\/$_mdrun -s $_name.tpr -rerun _$name.pdb -deffnm $name >>STD_ERR0 2>&1 && check2 $name.log ../REPORTFILE0
+	else
+		$_Gpath\/$_mdrun -s $name.tpr -deffnm $name -c $name.pdb >>STD_ERR0 2>&1 && check2 $name.log ../REPORTFILE0
+		#tar cfz PDBfiles_$name.tar.gz $name.pdb && rm -f $name.pdb
+	fi
+
+	tar cfz GROfiles_$name.tar.gz _$name.gro && rm -f _$name.gro
+	tar cfz PDBfiles1_$name.tar.gz _$name.pdb && rm -f _$name.pdb
+	#tar cfz PDBfiles_$name.tar.gz $name.pdb && rm -f $name.pdb #non lo produce con questo Mm.mdp 
+	
+	rm -f \#* *.edr *.trr 
+}
+
+function EnergyMin_n_NOcas {
+
+	local _name=$1
+	local _count=$2
+	local _Gpath=$3
+	local _mdrun="$4"
+
+	name=`echo $_name$_count`
+
+ 	check2 $_name.tpr ../REPORTFILE0 && $_Gpath\/$_mdrun -s $_name.tpr -rerun _$name.pdb -deffnm $name >>STD_ERR0 2>&1 && check2 $name.log ../REPORTFILE0
+
+	#tar cfz PDBfiles1_$name.tar.gz _$name.pdb && rm -f _$name.pdb
+	rm -f \#* *.edr *.trr *.gro
+}
+
+
+
+function EnergyMin_y {
+
+	local _name=$1
+	local _count=$2
+	local _Gpath=$3
+	local _ffield=$4
+	local _bX=$5
+	local _bY=$6
+	local _bZ=$7
+	local _topology=$8
+	local _editconf="$9"
+	local _pdb2gmx="${10}"
+	local _grompp="${11}"
+	local _mdrun="${12}"
+	name=`echo $_name$_count`
+
+	if [ $_topology == "y" ]; then
+		$_Gpath\/$_editconf -f _$name.pdb -o _$name.gro >>STD_ERR0 2>&1
+	else
+		echo "$_ffield" | $Gpath\/$_pdb2gmx -f _$name.pdb -p topol_$_name.top -i posre_$_name.itp -o _$name.gro -ignh -water tip3p >>STD_ERR0 2>&1
+	fi
+
+ 	check2 _$name.gro ../REPORTFILE0 && $_Gpath\/$_editconf -f _$name.gro -o _box$_count.gro -c -box $_bX $_bY $_bZ >>STD_ERR0 2>&1
+   	check2 _box$_count.gro ../REPORTFILE0 && $_Gpath\/$_grompp -f Mm.mdp -c _box$_count.gro -p topol_$_name.top -o $name.tpr >>STD_ERR0 2>&1
+  	check2 $name.tpr ../REPORTFILE0 && $Gpath\/$_mdrun -s $name.tpr -deffnm $name -c $name.pdb >>STD_ERR0 2>&1 && check2 $name.pdb ../REPORTFILE0
+
+	tar cfz GROfiles_$name.tar.gz _$name.gro && rm -f _$name.gro
+	tar cfz PDBfiles1_$name.tar.gz _$name.pdb && rm -f _$name.pdb
+	tar cfz PDBfiles_$name.tar.gz $name.pdb && rm -f $name.pdb  
+	rm -f \#* *.edr *.trr _box*.gro box_dimension.dat
+}
+
+
+#PQR & STRU files
+function PDB2PQR {
+ local _comp=$1
+ local _prot=$2
+ local _liga=$3
+ local _count=$4
+ local Gpath=$5
+ local editconf="$6"
+ nameC=`echo $_comp$_count`
+ nameP=`echo $_prot$_count`
+ nameL=`echo $_liga$_count`
+
+ check2 $nameC.tpr ../REPORTFILE0 && $Gpath\/$editconf -f $nameC.tpr -mead $nameC.pqr >>STD_ERR0 2>&1 && tar cfz PDBfiles1_$nameC.tar.gz $nameC.pdb && rm -f $nameC.pdb && check2 $nameC.pqr ../REPORTFILE0
+ check2 $nameP.tpr ../REPORTFILE0 && $Gpath\/$editconf -f $nameP.tpr -mead $nameP.pqr >>STD_ERR0 2>&1 && tar cfz PDBfiles1_$nameP.tar.gz $nameP.pdb && rm -f $nameP.pdb && check2 $nameP.pqr ../REPORTFILE0
+ check2 $nameL.tpr ../REPORTFILE && $Gpath\/$editconf -f $nameL.tpr -mead $nameL.pqr >>STD_ERR0 2>&1 && tar cfz PDBfiles1_$nameL.tar.gz $nameL.pdb && rm -f $nameL.pdb && check2 $nameL.pqr ../REPORTFILE
+
+# let "picO=($_count%23)"
+# if [ $picO -eq 0 ]; then
+  #echo -e "\n "$(date +%H:%M:%S)" \nGenerated the file $nameC.pqr, $nameP.pqr, $nameL.pqr files in $(pwd)..." | tee -a ../REPORTFILE0
+# fi
+}
+
+function generate_STRUfiles {
+	local _counter=$1
+	local _comp=$2		
+	local _protein=$3	
+	local _ligand=$4	
+	if [ -e $_comp$_counter.pqr ] && [ -e $_protein$_counter.pqr ] && [ -e $_ligand$_counter.pqr ] ; then 
+  	 touch stru$_counter.rep
+  	echo -e "###################################################### \n This is the report file for the file 
+	"$(pwd)"/comp"$_counter".pdb \n calculated by GMXPBSA \n###################################################### \n" > stru$_counter.rep
+ 	else
+  	echo -e " \n"$(date +%H:%M:%S)" \n Problems while generating the REP files. Exiting..." | tee -a ../REPORTFILE0
+  	exit 
+ 	fi 
+}
+
+
+
+function generate_STRUfiles_protein {
+	local _counter=$1
+	local _comp=$2		
+	if [ -e $_comp$_counter.pqr ]; then 
+  	 touch stru$_counter.rep
+  	echo -e "###################################################### \n This is the report file for the file 
+	"$(pwd)"/comp"$_counter".pdb \n calculated by GMXPBSA \n###################################################### \n" > stru$_counter.rep
+ 	else
+  	echo -e " \n"$(date +%H:%M:%S)" \n Problems while generating the REP files. Exiting..." | tee -a ../REPORTFILE0
+  	exit 
+ 	fi 
+}
+
+
+#BOX
+function find_box {
+	local _fin=$1
+	local _bx=$2
+	local _by=$3
+	local _bz=$4
+
+	bX=0; bY=0; bZ=0;
+	for((i=0; i<$_fin; i++ )); do
+		bx=`tail -1 _comp$i.gro | awk '{print $1}'`
+		by=`tail -1 _comp$i.gro | awk '{print $2}'`
+		bz=`tail -1 _comp$i.gro | awk '{print $3}'`
+		#bx=`grep "CRYST1" _comp$i.pdb | awk '{print $2/10}'`
+		#by=`grep "CRYST1" _comp$i.pdb | awk '{print $3/10}'`
+		#bz=`grep "CRYST1" _comp$i.pdb | awk '{print $4/10}'`
+
+if [ -z $bx ]; then
+	echo -e "\nIn Folder $FoLdeR the box dimensions can not be found. Please check your xtc or set the box dimension manually! Exiting...\n" | tee -a ../REPORTFILE0
+exit
+fi
+		x=`echo "$bx-$bX"| bc -l`;
+		X=`echo $x| cut -d - -f1`;
+		y=`echo "$by-$bY"| bc -l`;
+		Y=`echo $y| cut -d - -f1`;
+		z=`echo "$bz-$bZ"| bc -l`;
+		Z=`echo $z| cut -d - -f1`;
+
+		if [ $X ]
+		then
+			bX=$bx;
+		fi
+		if [ $Y ]
+		then
+			bY=$by;
+		fi
+		if [ $Z ]
+		then
+			bZ=$bz;
+		fi
+	done
+	bX=`echo "$bX+2"| bc -l | cut -d . -f1`
+	bY=`echo "$bY+2"| bc -l | cut -d . -f1`
+	bZ=`echo "$bZ+2"| bc -l | cut -d . -f1`
+	eval	$_bx="'$bX'"
+	eval	$_by="'$bY'"
+	eval	$_bz="'$bZ'"
+	echo -e $bX "\t" $bY "\t" $bZ > box_dimension.dat
+}
+
+###########################
+#LJ CALCULATION
+###########################
+
+function ReadEnergy {
+	local _filename=$1
+	local _energy=$2
+	local _results=$3
+	
+	l=$(grep -n "$_energy" $_filename | cut -d: -f1 | tail -1); 
+	if [ -z $l ]; then echo -e "\nIn the file $_filename is not present the keyword $_energy, necessary to calculate the energy contributions. Check the calculations relative to the energy minimization. Exiting.."; exit; fi
+	let "l=$l+1";
+	c=`sed  -n '/'$_energy'/{N;p;}' $_filename | tail -n 2 | head -n 1 | awk -v energy="$_energy" '{ for(i=1;i<=NF;i++){if ($i ~ energy) { print i } }}'`
+	VAL=$(sed -n $l\p $_filename | awk -v c="$c" '{print $c}')
+	
+	#if ! [[ "$VAL" =~ ^[0-9]+$ ]] -> controla che sia un numero, però non riconosce gli esponenziali!
+	if [ -z $VAL ] 
+	then
+	#	exec >&2;
+		echo -e "\n ERROR: Variable $_results is empty" | tee -a ../REPORTFILE0 ;
+ 	#	exit 1  
+		exit
+	fi
+
+	eval $_results="'$VAL'"
+}
+
+function ReadEnergy_Pot {
+	local _filename=$1
+	local _energy=$2
+	local _results=$3
+
+	l=$(grep -n -e "${_energy}$" -e "${_energy}    " $_filename | cut -d: -f1 | tail -1)	
+	if [ -z $l ]; then 
+		echo -e "In the file $_filename is not present the keyword $_energy. Check the calculations relative to the energy minimization.";
+	else
+		let "m=$l+1";
+		c=`sed -n $l'p' $_filename | awk -v energy="$_energy" '{ for(i=1;i<=NF;i++){if ($i ~ energy) { print i } }}'`
+
+		VAL=$(sed -n $m'p' $_filename | awk -v c="$c" '{print $c}')
+		#if ! [[ "$VAL" =~ ^[0-9]+$ ]] -> controla che sia un numero, però non riconosce gli esponenziali!
+		if [ -z $VAL ] 
+		then
+		#	exec >&2;
+			echo -e "Warning: Can not read $_results, errors can occur in the file PotEn.PotEn. This fact will not influence the final results." | tee -a ../REPORTFILE0 ;
+ 		#	exit 1   
+			#exit
+		fi
+		eval $_results="'$VAL'"
+	fi
+}
+
+
+function ReadEnergy_special {
+	local _filename=$1
+	local _energy=$2
+	local _results=$3
+	
+	l=$(grep -n "$_energy" $_filename | cut -d: -f1 | tail -1); 
+	if [ -z $l ]; then 
+		eval $_results="X"
+	else
+		let "l=$l+1";
+		c=`sed  -n '/'$_energy'/{N;p;}' $_filename | tail -n 2 | head -n 1 | awk -v energy="$_energy" '{ for(i=1;i<=NF;i++){if ($i ~ energy) { print i } }}'`
+		VAL=$(sed -n $l\p $_filename | awk -v c="$c" '{print $c}')
+	
+		#if ! [[ "$VAL" =~ ^[0-9]+$ ]] -> controla che sia un numero, però non riconosce gli esponenziali!
+		if [ -z $VAL ] 
+		then
+		#	exec >&2;
+			echo -e "\n ERROR: Variable $_results is empty" | tee -a ../REPORTFILE0 ;
+ 		#	exit 1  
+			exit
+		fi
+
+		eval $_results="'$VAL'"
+	fi
+}
+
+

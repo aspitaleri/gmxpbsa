@@ -1,0 +1,430 @@
+# PRINT_WELCOME
+#
+function PRINT_WELCOME {
+echo -e " \n################################################################ \nHere you'll find the recap of the processes 
+################################################################ \n \nThe binding free energy (DG_bind) will be calculated by the \nMM/MPBSA method as (eqn.1)
+       DG_bind = < G_complex - G_protein - G_ligand >        (1) \nwhere the G_complex, G_protein and G_ligand are the free \nenergies of complex, protein and ligand respectively. The 
+brackets indicate that the average of snapshots taken from a \nsingle MD trajectory will be considered. \nThe free energy of each state is calculated as (eqn.2): 
+              G = E_MM + G_PB + G_SA - TS                    (2) \nTS is the entropic contribution of the solute, which will not be
+evaluated in the first version of this script. \nG_PB and G_SA are the contributions from polar and nonpolar \nterms of the free energy of the solvent continuum, the first 
+being calculated via the Poisson-Bolztmann equation and the \nlatter being calculated as (eqn.3)
+                  G_SA = g SASA + b                          (3) \nwhere g is the surface tension proportionality constant, b is 
+the free energy of nonpolar solvation for a point solute and \nSASA is the solvent accessible surface area. 
+E_MM is the molecular mechanical energy, calculated as the sum \nof different contributions (eqn.4) 
+              E_MM = E_vdW + E_ele + E_int                   (4) \nE_vdW, E_ele are the van der Waals (LJ) and the electrostatic \nenergies, respectively. 
+E_int is the internal energy including bond, angle and torsional \nangle energies. It is worth noting that in the case of \nsingle-trajectory experiments, the variation of E_int (DE_int)
+equals zero in calculating the binding free energy according to \neqn.1, since the internal energies of the complex and the \nseparated parts (protein and ligand) are calculated from the 
+same trajectory. \n \nThese terms will be calculated and stored in REP files (one for \neach PDB file) separatedly. \n \n \n \n
+======================== \n \nThe complex is named $complex. \nThe protein is named $receptor. \nThe ligand is named $ligand. \nThe operative files (xtc, tpr) are named ${name_xtc} and ${name_tpr}. \n
+======================== \n \n \n \n $(date +%H:%M:%S) \nThe procedure is initiated." 
+}
+
+
+#PRINT DELETESC FILE
+#
+function PRINT_DELETESC {
+echo -e '#!/bin/perl\n\n# Please contact me at dimitris3.16@gmail.com\n \n# This file is run with the following line\n# perl deleteSC.pl InputFile.PDB ResidueToBeMutated ResidueNumberToBeMutated prot/lig FinalResidue OutputFile.PDB limit y/n\n# where y="file of type _comp*", n="file of type _lig* or _prot*"\n# e.g.: perl deleteSC.pl 1xwh.pdb CYS 310 ALA 1xwh_C310A.pdb \n\nuse warnings;\n# use strict;\n\nopen(IN,"$ARGV[0]") or die "$!";\n$RS = $ARGV[1];\n$RN = $ARGV[2];\n$protlig = $ARGV[3];\n$RF = $ARGV[4];\n$OUT= $ARGV[5];\n$limit = $ARGV[6];\n$filetype = $ARGV[7];\n$INT="intermediate.pdb"; \nopen(INT, ">$INT") or die "$!";\n\n# A new structure is generated, mutating the selected residue into alanine, into intermediate.pdb\n $count=0;\n foreach $line (<IN>) {\n $count=$count+1;\n chomp $line;\n if ($line =~ /^ATOM/) {\n  @array=split(/ +/,$line);\n  if ($filetype eq "n"){\n  if (( $array[3] eq $RS ) && ( ( $array[5] == $RN ) || ( $array[4] =~ /$RN$/ ) ) ) {\n  if (($array[2] eq "C") || ($array[2] eq "O") || ($array[2] eq "N") || ($array[2] eq "H") || ($array[2] eq "CA") || ($array[2] eq "HA") || ($array[2] eq "CB")) {\n  $line =~ s/$RS/$RF/;\n  print INT "$line\\n";\n}\n}else{\n  print INT "$line\\n";\n}\n}\nelse{\n  if ( ( ($protlig eq "receptor") && ($filetype eq "before") ) || ( ($protlig eq "lig") && ($filetype eq "after") ) ){\n  if (( $array[3] eq $RS ) && ( ( $array[5] == $RN ) || ( $array[4] =~ /$RN$/ ) ) && ( $count <= $limit )) {\n  if (($array[2] eq "C") || ($array[2] eq "O") || ($array[2] eq "N") || ($array[2] eq "H") || ($array[2] eq "CA") || ($array[2] eq "HA") || ($array[2] eq "CB")) {\n  $line =~ s/$RS/$RF/;\n  print INT "$line\\n";\n}\n}else{\n  print INT "$line\\n";\n}\n}\nelse{\n  if (( $array[3] eq $RS ) && ( ( $array[5] == $RN ) || ( $array[4] =~ /$RN$/ ) ) && ( $count >= $limit )) {\n  if (($array[2] eq "C") || ($array[2] eq "O") || ($array[2] eq "N") || ($array[2] eq "H") || ($array[2] eq "CA") || ($array[2] eq "HA") || ($array[2] eq "CB")) {\n  $line =~ s/$RS/$RF/;\n  print INT "$line\\n";\n}\n}else{\n  print INT "$line\\n";\n}\n\n\n }\n\n}\n}\n}\nclose(IN);\nclose(INT);\n\n# The atoms are re-numbered according to the new structure\nopen(INT, "$INT") or die "$!";\nopen(OUT, ">$OUT") or die "$!";\nforeach $line (<INT>) {\n chomp $line;\n if ($line =~ /^ATOM/) {\n#  @array=split(/ +/,$line);\n#  push @index, $array[1];\n#  $line =~ s/$array[1]/$index[0]/;\n#  ++$index[0];\n  print OUT "$line\\n";\n}\n}\n\nsystem("rm intermediate.pdb");\nclose(INT);\nclose(OUT);'
+}
+
+#PRINT MINIMIZATION FILES
+#
+function PRINT_MINfile_y {
+ echo -e "title = Steepest gradient, 2000 steps \ncpp   =  /usr/bin/cpp \ndefine      = -DFLEXIBLE \n;constraints = hbonds \nintegrator  = steep
+dt          =  0.001 ; ps \nnsteps      =  2000 \nnstlist     =  5 \nns_type     =  grid \npbc         =  xyz \nrlist       =  0.9
+table-extension = 2 \ncoulombtype =  PME \nrcoulomb    =  0.9 \nrvdw        =  0.9 \nfourierspacing = 0.12 \nfourier_nx = 0 \nfourier_ny = 0
+fourier_nz = 0 \npme_order   =  4 \newald_rtol  =  1e-5 \noptimize_fft = yes \n; Energy minimizing stuff \nemtol       =  1000 \nemstep      =  0.01
+lincs_iter  =  4" >> Mm.mdp
+}
+#per coulombtype valuta di mettere opzione diversa, tipo cutoff
+
+#tradition mdp
+#function PRINT_MINfile_n {
+# echo -e "title = Energy in gas \ncpp   = /usr/bin/cpp \nconstraints = none \nnsteps = 0 \nnstlist = 0 \nns_type = simple
+#rlist = 0 \nrcoulomb = 0 \nrvdw = 0 \npbc = no \n;" >> Mm.mdp
+#}
+
+function PRINT_MINfile_n {
+ echo -e "title = Energy in gas \ncpp   = /usr/bin/cpp \nconstraints = none \nnsteps = 0 \nnstlist = 0 \nns_type = simple
+rlist = 0 \nrcoulomb = 0 \nrvdw = 0 \npbc = no \ncutoff-scheme = group \n;" >> Mm.mdp
+}
+
+#trying with verlet
+##function PRINT_MINfile_n {
+# echo -e "title = Energy in gas \ncpp   = /usr/bin/cpp \nconstraints = none \nnsteps = 0 \nnstlist = 1 \nns_type = simple
+#\n;rcoulomb = 0.1 \n;rvdw = 0.1 \npbc = xyz \ncutoff-scheme = Verlet \nverlet-buffer-drift=0.005 \nperiodic-molecules = no" >> Mm.mdp
+#}
+
+
+
+
+#PRINT APBS INPUT FILES
+#
+function PRINT_APBS_POLAR_IN {
+	metr=$1;
+	complex=$2; protein=$3; ligand=$4;
+	XGrid=$5; YGrid=$6; ZGrid=$7;
+	XLeN=$8; YLeN=$9; ZLeN=${10};
+	XLEn=${11}; YLEn=${12}; ZLEn=${13};
+	XCeN=${14}; YCeN=${15}; ZCeN=${16};
+	pb=${17}; pdie=${18}; sdie=${19}; srad=${20}; temp=${21}; bcfl=${22};
+	chgm=${23}; srfm=${24}; swin=${25}; sdens=${26}; calcforce=${27};
+	ion_ch_pos=${28}; ion_rad_pos=${29}; ion_conc_pos=${30}; ion_ch_neg=${31}; ion_rad_neg=${32}; ion_conc_neg=${33};
+	calcenergy=${34}
+
+	FakePRoT=$(echo $protein$metr)	
+	FakeLIgA=$(echo $ligand$metr) 
+
+
+echo -e "read \n mol pqr comp$metr.pqr #$complex \n mol pqr $FakePRoT.pqr #$protein \n mol pqr $FakeLIgA.pqr #$ligand \nend \n
+ELEC name comp$metr \n mg-auto \n dime   $XGrid $YGrid $ZGrid #$complex \n cglen $XLeN $YLeN $ZLeN #$complex
+fglen $XLEn $YLEn $ZLEn #$complex \n cgcent $XCeN $YCeN $ZCeN #$complex \n fgcent $XCeN $YCeN $ZCeN #$complex \n $pb \n bcfl $bcfl
+ion  charge ${ion_ch_pos} conc ${ion_conc_pos} radius ${ion_rad_pos} \n ion charge ${ion_ch_neg} conc ${ion_conc_neg} radius ${ion_rad_neg} \n pdie $pdie #$complex \n sdie $sdie #$complex
+chgm $chgm \n mol 1 \n srfm $srfm \n srad $srad #$complex \n swin $swin #$complex \n temp $temp #$complex \n sdens $sdens #$complex
+calcenergy ${calcenergy} #comps #total \n calcforce ${calcforce} \nend \n
+ELEC name $FakePRoT \n mg-auto \n dime   $XGrid $YGrid $ZGrid #$protein \n cglen $XLeN $YLeN $ZLeN #$protein
+fglen $XLEn $YLEn $ZLEn #$protein \n cgcent $XCeN $YCeN $ZCeN #$protein \n fgcent $XCeN $YCeN $ZCeN #$protein \n $pb \n bcfl $bcfl
+ion  charge ${ion_ch_pos} conc ${ion_conc_pos} radius ${ion_rad_pos} \n ion charge ${ion_ch_neg} conc ${ion_conc_neg} radius ${ion_rad_neg} \n pdie $pdie #$protein \n sdie $sdie #$protein 
+chgm $chgm \n mol 2 \n srfm $srfm \n srad $srad #$protein \n swin $swin #$protein \n temp $temp #$protein \n sdens $sdens #$protein
+calcenergy ${calcenergy} #comps #total \n calcforce ${calcforce} \nend \n
+ELEC name $FakeLIgA \n mg-auto \n dime   $XGrid $YGrid $ZGrid #$ligand \n cglen $XLeN $YLeN $ZLeN #$ligand 
+fglen $XLEn $YLEn $ZLEn #$ligand \n cgcent $XCeN $YCeN $ZCeN #$ligand \n fgcent $XCeN $YCeN $ZCeN #$ligand \n $pb \n bcfl $bcfl 
+ion charge ${ion_ch_pos} conc ${ion_conc_pos} radius ${ion_rad_pos} \n ion charge ${ion_ch_neg} conc ${ion_conc_neg} radius ${ion_rad_neg} \n pdie $pdie #$ligand \n sdie $sdie #$ligand
+chgm $chgm \n mol 3 \n srfm $srfm \n srad $srad #$ligand \n swin $swin #$ligand \n temp $temp #$ligand \n sdens $sdens #$ligand
+calcenergy ${calcenergy} #comps #total \n calcforce  ${calcforce} \nend \n
+ELEC name vaccomp$metr \n mg-auto \n dime   $XGrid $YGrid $ZGrid #$complex \n cglen $XLeN $YLeN $ZLeN #$complex \n fglen $XLEn $YLEn $ZLEn #$complex
+cgcent $XCeN $YCeN $ZCeN #$complex \n fgcent $XCeN $YCeN $ZCeN #$complex \n $pb \n bcfl $bcfl
+ion  charge ${ion_ch_pos} conc 0.00 radius  ${ion_rad_pos} \n ion charge ${ion_ch_neg} conc 0.00 radius ${ion_rad_neg} \n pdie $pdie #$complex \n  sdie 1 #$complex
+chgm $chgm \n mol 1 \n srfm $srfm \n srad $srad #$complex \n swin $swin \n temp $temp #$complex \n sdens $sdens #$complex
+calcenergy ${calcenergy} #comps #total \n calcforce ${calcforce} \nend \n
+ELEC name vac$FakePRoT \n mg-auto \n dime   $XGrid $YGrid $ZGrid #$protein \n cglen $XLeN $YLeN $ZLeN #$protein \n fglen $XLEn $YLEn $ZLEn #$protein
+cgcent $XCeN $YCeN $ZCeN #$protein \n fgcent $XCeN $YCeN $ZCeN #$protein \n $pb \n bcfl $bcfl 
+ion  charge ${ion_ch_pos} conc 0.00 radius ${ion_rad_pos} \n ion charge ${ion_ch_neg} conc 0.00 radius ${ion_rad_neg} \n pdie $pdie #$protein \n sdie 1 #$protein
+chgm $chgm \n mol 2 \n srfm $srfm \n srad $srad #$protein \n swin $swin #$protein \n temp $temp #$protein \n sdens $sdens #$protein
+calcenergy ${calcenergy} #comps #total \n calcforce ${calcforce} \nend \n
+ELEC name vac$FakeLIgA \n mg-auto \n dime   $XGrid $YGrid $ZGrid #$ligand \n cglen $XLeN $YLeN $ZLeN #$ligand \n fglen $XLEn $YLEn $ZLEn #$ligand
+cgcent $XCeN $YCeN $ZCeN #$ligand \n fgcent $XCeN $YCeN $ZCeN #$ligand \n $pb \n bcfl $bcfl
+ion  charge ${ion_ch_pos} conc 0.00 radius ${ion_rad_pos} \n ion charge ${ion_ch_neg} conc 0.00 radius ${ion_rad_neg} \n pdie $pdie #$ligand \n sdie 1 #$ligand
+chgm $chgm \n mol 3 \n srfm $srfm \n srad $srad #$ligand \n swin $swin #$ligand \n temp $temp #$ligand \n sdens $sdens #$ligand
+calcenergy ${calcenergy} #comps #total \n calcforce ${calcforce} \nend \n
+print elecEnergy comp$metr - $FakePRoT - $FakeLIgA - vaccomp$metr + vac$FakePRoT + vac$FakeLIgA end \nquit"
+}
+
+#
+function PRINT_APBS_NONPOLAR_IN {
+	metr=$1;
+	complex=$2; protein=$3; ligand=$4;
+	srad=$5; temp=$6; swin=$7; sdens=$8;
+	Hsrfm=$9; Hpress=${10}; Hgamma=${11};Hbconc=${12};Hdpos=${13};
+	Hcalcforce=${14}; calcenergy=${15};
+	Hxgrid=${16}; Hygrid=${17}; Hzgrid=${18};
+		
+	FakePRoT=$(echo $protein$metr)	
+	FakeLIgA=$(echo $ligand$metr) 
+
+echo -e "read \n mol pqr comp$metr.pqr #$complex \n mol pqr $FakePRoT.pqr #$protein \n mol pqr $FakeLIgA.pqr #$ligand \nend
+APOLAR name Hcomp$metr \n grid $Hxgrid $Hygrid $Hzgrid #$complex \n mol 1 #$complex \n srfm $Hsrfm #$complex \n swin $swin #$complex \n srad $srad #$complex \n press $Hpress #$complex
+ gamma $Hgamma #$complex \n bconc $Hbconc #$complex \n sdens $sdens #$complex \n dpos $Hdpos #$complex \n temp $temp #$complex \n calcenergy $calcenergy #$complex \n calcforce $Hcalcforce #$complex \nend \n
+APOLAR name H$FakePRoT \n grid $Hxgrid $Hygrid $Hzgrid #$protein \n mol 2 #$protein \n srfm $Hsrfm #$protein \n swin $swin #$protein \n srad $srad #$protein \n press $Hpress #$protein
+ gamma $Hgamma #$protein \n bconc $Hbconc #$protein \n sdens $sdens #$protein \n dpos $Hdpos #$protein \n temp $temp #$protein \n calcenergy $calcenergy #$protein \n calcforce $Hcalcforce #$protein \nend \n
+APOLAR name H$FakeLIgA \n grid $Hxgrid $Hygrid $Hzgrid #$ligand \n mol 3 #$ligand \n srfm $Hsrfm #$ligand \n swin $swin #$ligand \n srad $srad #$ligand \n press $Hpress #$ligand 
+ gamma $Hgamma #$ligand \n bconc $Hbconc #$ligand \n sdens $sdens #$ligand \n dpos $Hdpos #$ligand \n temp $temp #$ligand \n calcenergy $calcenergy #$ligand \n calcforce $Hcalcforce #$ligand \nend \n
+print apolEnergy Hcomp$metr - H$FakePRoT - H$FakeLIgA end \nquit"
+}
+
+
+#
+function PRINT_APBS_POLAR_IN_protein {
+	metr=$1;
+	complex=$2;	
+	XGrid=$3; YGrid=$4; ZGrid=$5;
+	XLeN=$6; YLeN=$7; ZLeN=${8};
+	XLEn=${9}; YLEn=${10}; ZLEn=${11};
+	XCeN=${12}; YCeN=${13}; ZCeN=${14};
+	pb=${15}; pdie=${16}; sdie=${17}; srad=${18}; temp=${19}; bcfl=${20};
+	chgm=${21}; srfm=${22}; swin=${23}; sdens=${24}; calcforce=${25};
+	ion_ch_pos=${26}; ion_rad_pos=${27}; ion_conc_pos=${28}; ion_ch_neg=${29}; ion_rad_neg=${30}; ion_conc_neg=${31};
+	calcenergy=${32}
+
+echo -e "read \n mol pqr comp$metr.pqr #$complex \nend \n
+ELEC name comp$metr \n mg-auto \n dime   $XGrid $YGrid $ZGrid #$complex \n cglen $XLeN $YLeN $ZLeN #$complex
+fglen $XLEn $YLEn $ZLEn #$complex \n cgcent $XCeN $YCeN $ZCeN #$complex \n fgcent $XCeN $YCeN $ZCeN #$complex \n $pb \n bcfl $bcfl
+ion  charge ${ion_ch_pos} conc ${ion_conc_pos} radius ${ion_rad_pos} \n ion charge ${ion_ch_neg} conc ${ion_conc_neg} radius ${ion_rad_neg} \n pdie $pdie #$complex \n sdie $sdie #$complex
+chgm $chgm \n mol 1 \n srfm $srfm \n srad $srad #$complex \n swin $swin #$complex \n temp $temp #$complex \n sdens $sdens #$complex
+calcenergy ${calcenergy} #comps #total \n calcforce ${calcforce} \nend \n
+ELEC name vaccomp$metr \n mg-auto \n dime   $XGrid $YGrid $ZGrid #$complex \n cglen $XLeN $YLeN $ZLeN #$complex \n fglen $XLEn $YLEn $ZLEn #$complex
+cgcent $XCeN $YCeN $ZCeN #$complex \n fgcent $XCeN $YCeN $ZCeN #$complex \n $pb \n bcfl $bcfl
+ion  charge ${ion_ch_pos} conc 0.00 radius  ${ion_rad_pos} \n ion charge ${ion_ch_neg} conc 0.00 radius ${ion_rad_neg} \n pdie $pdie #$complex \n  sdie 1 #$complex
+chgm $chgm \n mol 1 \n srfm $srfm \n srad $srad #$complex \n swin $swin \n temp $temp #$complex \n sdens $sdens #$complex
+calcenergy ${calcenergy} #comps #total \n calcforce ${calcforce} \nend \n
+print elecEnergy comp$metr - vaccomp$metr end \nquit"
+}
+
+#
+function PRINT_APBS_NONPOLAR_IN_protein {
+	metr=$1;
+	complex=$2; 
+	srad=$3; temp=$4; swin=$5; sdens=$6;
+	Hsrfm=$7; Hpress=${8}; Hgamma=${9};Hbconc=${10};Hdpos=${11};
+	Hcalcforce=${12}; calcenergy=${13};
+	Hxgrid=${14}; Hygrid=${15}; Hzgrid=${16};
+		
+echo -e "read \n mol pqr comp$metr.pqr #$complex \nend
+APOLAR name Hcomp$metr \n grid $Hxgrid $Hygrid $Hzgrid #$complex \n mol 1 #$complex \n srfm $Hsrfm #$complex \n swin $swin #$complex \n srad $srad #$complex \n press $Hpress #$complex
+ gamma $Hgamma #$complex \n bconc $Hbconc #$complex \n sdens $sdens #$complex \n dpos $Hdpos #$complex \n temp $temp #$complex \n calcenergy $calcenergy #$complex \n calcforce $Hcalcforce #$complex \nend \n
+print apolEnergy Hcomp$metr end \nquit"
+}
+
+
+
+
+#PRINT APBS SH FILES
+
+function PRINT_POLAR_SH_cluster {
+	
+	count=$1
+	processors=$2
+	Apath=$3
+	Q=$4
+	D=$5
+	C=$6
+	budget=$7
+	walltime=$8
+	option_clu=$9
+	option_clu2=${10}	
+
+let "first=$count*$processors"
+let "last=(($count+1)*$processors)-1"
+
+if [ $count -eq $D ]; then last=$C; fi
+
+
+echo -e "#!/bin/bash \n#PBS -N PoSol$first-$last \n#PBS -l ${option_clu} \n#PBS -q $Q \n#PBS -j oe \n#PBS -V"
+if [ ${option_clu2} ]; then echo -e "#PBS -l ${option_clu2}"; fi
+if [ $budget ]; then echo -e "#PBS -A $budget"; fi
+if [ $walltime ]; then echo -e "#PBS -l walltime=$walltime"; fi
+echo -e "\nPBS_O_INITDIR=\$PBS_O_WORKDIR \ncd \$PBS_O_WORKDIR \n \n";
+
+for i in `seq $first $last`; do
+
+	if [ $i -ne $last ]; then
+		echo -ne "$Apath/apbs stru$i.in &> stru$i.out &\n"
+	else
+		echo -ne "$Apath/apbs stru$i.in &> stru$i.out\n"
+
+	fi
+done
+
+echo -e "\nwait\n\n"
+
+for i in `seq $first $last`; do
+	echo -e "check=0;"
+	if [ $i -ne $last ]; then
+		echo -e "check=\`awk '/Global net ELEC energy/ {print \$6}' stru$i.out\`"
+		echo -e "if [ \$check ]; then"
+			echo -e "\t echo 'polar solvation (APBS) = '\$(awk '/Global net ELEC energy/ {print \$6}' stru$i.out)' ' >> ../SUMMARY_FILES/stru$i.rep\n"
+		echo -e "fi\n"
+	else
+		echo -e "check=\`awk '/Global net ELEC energy/ {print \$6}' stru$i.out\`"
+		echo -e "if [ \$check ]; then"
+			echo -e "\t echo 'polar solvation (APBS) = '\$(awk '/Global net ELEC energy/ {print \$6}' stru$i.out)' ' >> ../SUMMARY_FILES/stru$i.rep\n"
+		echo -e "fi\n"
+	fi
+done
+
+}
+
+function PRINT_NONPOLAR_SH_cluster {
+
+	count=$1
+	processors=$2
+	Apath=$3
+	Q=$4
+	D=$5
+	C=$6
+	budget=$7
+	walltime=$8
+	option_clu=$9
+	option_clu2=${10}
+
+let "first=$count*$processors"
+let "last=(($count+1)*$processors)-1"
+
+if [ $count -eq $D ]; then last=$C; fi
+
+echo -e "#!/bin/bash \n#PBS -N NpSol$first-$last \n#PBS -l  ${option_clu} \n#PBS -q $Q \n#PBS -j oe \n#PBS -V"
+if [ ${option_clu2} ]; then echo -e "#PBS -l ${option_clu2}"; fi
+if [ $budget ]; then echo -e "#PBS -A $budget"; fi
+if [ $walltime ]; then echo -e "#PBS -l walltime=$walltime"; fi
+echo -e "\nPBS_O_INITDIR=\$PBS_O_WORKDIR \ncd \$PBS_O_WORKDIR \n \n";
+
+
+for i in `seq $first $last`; do
+	if [ $i -ne $last ]; then
+		echo -ne "$Apath/apbs Hstru$i.in &> Hstru$i.out &\n"
+	else
+		echo -ne "$Apath/apbs Hstru$i.in &> Hstru$i.out\n"
+	fi
+done
+
+echo -e "\nwait\n\n"
+
+for i in `seq $first $last`; do
+	echo -e "check=0";
+	if [ $i -ne $last ]; then
+		echo -e "check=\`awk '/Global net APOL energy/ {print \$6}' Hstru$i.out\`"
+		echo -e "if [ \$check ]; then"
+			echo -e "\t echo 'nonpolar solvation (APBS) = '\$(awk '/Global net APOL energy/ {print \$6}' Hstru$i.out)' ' >> ../SUMMARY_FILES/stru$i.rep\n"
+		echo -e "fi\n"
+	else
+		echo -e "check=\`awk '/Global net APOL energy/ {print \$6}' Hstru$i.out\`"
+		echo -e "if [ \$check ]; then"
+			echo -e "\t echo 'nonpolar solvation (APBS) = '\$(awk '/Global net APOL energy/ {print \$6}' Hstru$i.out)' ' >> ../SUMMARY_FILES/stru$i.rep\n"
+		echo -e "fi\n"
+	fi
+done
+
+}
+
+function PRINT_POLAR_SH {
+	count=$1
+	Apath=$2
+
+ echo -e "#!/bin/bash \n\n $Apath/apbs stru$count.in &> stru$count.out && echo 'polar solvation (APBS) = '\$(awk '/Global net ELEC energy/ {print \$6}' stru$count.out)' ' >>  ../SUMMARY_FILES/stru$count.rep "
+
+}
+
+
+function PRINT_NONPOLAR_SH {
+	count=$1
+	Apath=$2
+
+ echo -e "#!/bin/bash \n\n $Apath/apbs Hstru$count.in &> Hstru$count.out && echo 'nonpolar solvation (APBS) = '\$(awk '/Global net APOL energy/ {print \$6}' Hstru$count.out)' ' >>  ../SUMMARY_FILES/stru$count.rep "
+
+}
+
+
+
+
+
+#RECOVER
+
+function recoverPRINT_POLAR_SH_cluster {
+	
+	count=$1
+	processors=$2
+	Apath=$3
+	Q=$4
+	D=$5
+	C=$6
+	budget=$7
+	walltime=$8
+	fr=$9
+	option_clu=${10}
+	option_clu2=${11}
+
+
+let "first=$count*$processors"
+let "last=(($count+1)*$processors)-1"
+if [ $count -eq $D ]; then let "last=$C-1"; fi
+
+
+N=`echo $fr | awk '{N=split($0,vett," "); print N}'`
+for ((i=0; i<$N; i++)); do
+	v[$i]=`echo $fr | awk -v i=$(($i+1)) '{N=split($0,vett," "); print vett[i]}'`
+done
+
+echo -e "#!/bin/bash \n#PBS -N RePSol$first-$last \n#PBS -l ${option_clu} \n#PBS -q $Q \n#PBS -j oe \n#PBS -V"
+if [ ${option_clu2} ]; then echo -e "#PBS -l ${option_clu2}"; fi
+if [ $budget ]; then echo -e "#PBS -A $budget"; fi
+if [ $walltime ]; then echo -e "#PBS -l walltime=$walltime"; fi
+echo -e "\nPBS_O_INITDIR=\$PBS_O_WORKDIR \ncd \$PBS_O_WORKDIR \n \n";
+
+for i in `seq $first $last`; do
+
+	if [ $i -ne $last ]; then
+		echo -ne "$Apath/apbs stru${v[$i]}.in &> stru${v[$i]}.out &\n"
+	else
+		echo -ne "$Apath/apbs stru${v[$i]}.in &> stru${v[$i]}.out\n"
+
+	fi
+done
+
+echo -e "\nwait\n\n"
+
+for i in `seq $first $last`; do
+	echo -e "check=0;"
+	if [ $i -ne $last ]; then
+		echo -e "check=\`awk '/Global net ELEC energy/ {print \$6}' stru${v[$i]}.out\`"
+		echo -e "if [ \$check ]; then"
+			echo -e "\t echo 'polar solvation (APBS) = '\$(awk '/Global net ELEC energy/ {print \$6}' stru${v[$i]}.out)' ' >> ../SUMMARY_FILES/stru${v[$i]}.rep \n"
+		echo -e "fi\n"
+	else
+		echo -e "check=\`awk '/Global net ELEC energy/ {print \$6}' stru${v[$i]}.out\`"
+		echo -e "if [ \$check ]; then"
+			echo -e "\t echo 'polar solvation (APBS) = '\$(awk '/Global net ELEC energy/ {print \$6}' stru${v[$i]}.out)' ' >> ../SUMMARY_FILES/stru${v[$i]}.rep\n"
+		echo -e "fi\n"
+
+	fi
+done
+
+}
+
+function recoverPRINT_NONPOLAR_SH_cluster {
+
+	count=$1
+	processors=$2
+	Apath=$3
+	Q=$4
+	D=$5
+	C=$6
+	budget=$7
+	walltime=$8
+	fr=$9
+	option_clu=${10}
+	option_clu2=${11}
+
+let "first=$count*$processors"
+let "last=(($count+1)*$processors)-1"
+if [ $count -eq $D ]; then let "last=$C-1"; fi
+
+N=`echo $fr | awk '{N=split($0,vett," "); print N}'`
+for ((i=0; i<$N; i++)); do
+	v[$i]=`echo $fr | awk -v i=$(($i+1)) '{N=split($0,vett," "); print vett[i]}'`
+done
+
+echo -e "#!/bin/bash \n#PBS -N ReNSol$first-$last \n#PBS -l ${option_clu} \n#PBS -q $Q \n#PBS -j oe \n#PBS -V"
+if [ ${option_clu2} ]; then echo -e "#PBS -l ${option_clu2}"; fi
+if [ $budget ]; then echo -e "#PBS -A $budget"; fi
+if [ $walltime ]; then echo -e "#PBS -l walltime=$walltime"; fi
+echo -e "\nPBS_O_INITDIR=\$PBS_O_WORKDIR \ncd \$PBS_O_WORKDIR \n \n";
+
+
+for i in `seq $first $last`; do
+	if [ $i -ne $last ]; then
+		echo -ne "$Apath/apbs Hstru${v[$i]}.in &> Hstru${v[$i]}.out &\n"
+	else
+		echo -ne "$Apath/apbs Hstru${v[$i]}.in &> Hstru${v[$i]}.out\n"
+	fi
+done
+
+echo -e "\nwait\n\n"
+
+for i in `seq $first $last`; do
+	echo -e "check=0;"
+	if [ $i -ne $last ]; then
+		echo -e "check=\`awk '/Global net APOL energy/ {print \$6}' Hstru${v[$i]}.out\`"
+		echo -e "if [ \$check ]; then"
+			echo -e "\t echo 'nonpolar solvation (APBS) = '\$(awk '/Global net APOL energy/ {print \$6}' Hstru${v[$i]}.out)' ' >> ../SUMMARY_FILES/stru${v[$i]}.rep \n"
+		echo -e "fi\n"
+	else
+		echo -e "check=\`awk '/Global net APOL energy/ {print \$6}' Hstru${v[$i]}.out\`"
+		echo -e "if [ \$check ]; then"
+			echo -e "\t echo 'nonpolar solvation (APBS) = '\$(awk '/Global net APOL energy/ {print \$6}' Hstru${v[$i]}.out)' ' >> ../SUMMARY_FILES/stru${v[$i]}.rep\n"
+		echo -e "fi\n"
+	fi
+	
+done
+
+}
+
+ 

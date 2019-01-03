@@ -1,0 +1,222 @@
+Change in GMXPBSA version 2.1:
+
+
+January 2017
+
+The compatibility with Gromacs 5 has been adjusted.
+
+
+March 2016
+
+1) Add the check of the path Gpath Apath Cpath
+
+
+December 2015
+
+Fixed a bug in the function Average_No_Outliers
+
+June 2015
+
+1) Added the possibility to consider some water molecules as part of the protein, when using "use_topology	y".
+In input you should indicate the number of water molecules that you are going to consider with the keyword:
+
+water_mol	NUM	 #where NUM is the number of water-molecules. 
+
+Note that:
+a. In topol.top file these molecules should be listed under "SOL".
+b. in the index file these water molecules should be indicated as part of the protein.
+i.e.: index relative to
+complex		-> indicates receptor + water-molecules + ligand
+receptor	-> indicates receptor + water-molecules
+ligand		-> indicates only ligand 
+
+
+
+
+April 2015
+
+1) Added the possibility to perform CAS (on receptor residues) when a custom topology is required for the ligand. A new keyword has been added: "Ltopology_Pff" that must be set to "y". In the INPUT.dat file one must specify the following parameters:
+Ltopology_Pff	y
+use_topology	n
+itp_ligand 	name of the itp file for the ligand 
+ffield (or use_nonstd_ff) indicating the force-field to use for the receptor
+
+If the protonation of the receptor's histidines creates problem (error in the step pdb2gmx/grompp) one should indicate the correct protonation (the one in the xtc file) for each histidine residue of the receptor. In the following example the protonation of the 3 receptor's histidines is indicated (0=HISD; 1=HISE; 2=HISP):
+Histidine 0 1 1
+This keyword is not mandatory but should be used when errors in pdb2gmx/grompp steps occur.
+
+
+
+February 2015
+
+1) in gmxpbsa0.sh replaced lines:
+ 		declare -A first
+		for indexk in $complex $receptor $ligand; do
+			index_line=`grep -n '^\[ '${indexk}' \]' index.ndx | cut -d: -f1`
+			index_line=$(($index_line + 1));
+			first[$indexk]=`head -n ${index_line} index.ndx | tail -n 1 | awk '{print $1}'`
+		done
+		if [ ${first[$complex]} -eq ${first[$ligand]} ]; then
+		......
+with the following lines:
+		complex_line=`grep -n '^\[ '${complex}' \]' index.ndx | cut -d: -f1`
+		complex_line=$((${complex_line} + 1));
+		first_c=`head -n ${complex_line} index.ndx | tail -n 1 | awk '{print $1}'`
+		ligand_line=`grep -n '^\[ '${ligand}' \]' index.ndx | cut -d: -f1`
+		ligand_line=$((${ligand_line} + 1));
+		first_l=`head -n ${ligand_line} index.ndx | tail -n 1 | awk '{print $1}'`		
+		if [ ${first_c} -eq ${first_l} ]; then
+		......
+in order to make gmxpbsa0.sh compatible with iOS.
+
+2) Added the option "cutoff-scheme = group" in Mm.mdp in order to make it compatible with gromacs5.x.
+Changed lines in print_files.dat from:
+	function PRINT_MINfile_n {
+		echo -e "title = Energy in gas \ncpp   = /usr/bin/cpp \nconstraints = none \nnsteps = 0 \nnstlist = 0 \nns_type = simple
+		rlist = 0 \nrcoulomb = 0 \nrvdw = 0 \npbc = no \n;" >> Mm.mdp
+	}
+to:
+	function PRINT_MINfile_n {	
+		echo -e "title = Energy in gas \ncpp   = /usr/bin/cpp \nconstraints = none \nnsteps = 0 \nnstlist = 0 \nns_type = simple
+		rlist = 0 \nrcoulomb = 0 \nrvdw = 0 \npbc = no \ncutoff-scheme = group \n;" >> Mm.mdp
+	}
+
+
+
+December 2014
+
+1) the option "PBS -l place=free" has been deleted. A new keyword is avaliable called "option_clu2" (optional) to add a new command PBS -l ${option_clu2}
+
+2) backup of gmxpbsa0.sh is added
+
+
+3) the option "double_p" is deleted. In place of this one there are 2 new options "gmx_prefix" and "gmx_suffix". So, if one has to call the command "mdrun_mpi" instead of "mdrun" should set  "gmx_suffix   _mpi" in the INPUT.dat file.
+
+
+September 2014
+
+1) The options "nodes" and "mem" have been eliminated.
+   
+A new option is required when using a cluster:
+
+"option_clu",  by default it is set to "select=$mnp:ncpus=1:mem=5GB"
+when running on a cluster it will be used the command: #PBS -l ${option_clu} 
+
+"mnp" is still required, otherwise it will be set to 1 and only 1 APBS job at time will be performed (even if using more processors). 
+(Example: when using "option_clu = nodes=2:ppn=8" mnp must be set to "mnp=16".)
+
+
+2) CORRECTIONS TO MAKE GMXPBSA COMPATIBLE TO MAC:
+
+- in gmxpbsa0.sh / function_gmx.dat files, 29 substitutions: &>>STD_ERR0    to    >>STD_ERR0 2>&1
+
+- in  function_gmx.dat, 2 subs:  c=`sed -n '/'$_energy'/{N;p}' to  c=`sed -n '/'$_energy'/{N;p;}'
+
+- in  function_gmx.dat, 12 subs:  sed -i      to     sed -i -e
+
+- in gmxpbsa0.sh, 8 subs: COMP$counter.log    to Pcomp$counter.log
+
+- in gmxpbsa2.sh, 1sub: OUTLIERS=`sort -k 2 -n WARNINGS.dat -u | awk '{if ($1=="FRAME") print $2}'`  to  OUTLIERS=`sort -k 2 -n WARNINGS.dat -u | awk '{if ($1=="FRAME") printf("%d ",$2);}'`
+
+
+
+
+August 2014
+
+1) Fixed bug related to the use of amino acids with id > 1000.
+
+
+2) Fixed bug related to the computing of the percentage of failed APBS-jobs.
+
+
+3) Fixed a bug related to the CAS mutation in the cases in which:
+	- no chains information are available from xtc/tpr
+	- the ligand is positioned before the receptor in the pdb
+
+
+4) Added final message with proper references.
+
+
+5) Added the possibility to check the GMXPBSA version with the command " sh gmxpbsa[0,1,2].sh -h "
+
+
+6) Possibility to use "multichain". (Added keyword "multichain", set by default to "n")
+Useful if in the pdbs extracted from the trajectory there are more than one chains.
+The option "multichain" must be used ONLY if the string TER is not present at the end of each chain in the comp/receptor pdb files.
+
+7) Added the possibility to perform DeltaG CAS calculation on a single protein.
+(Added keyword "protein_alone", set by default to "n", and keyword "itp_protein" that must be set only in case of "use_topology=y".)
+
+a) in case of use_topology the following files must be provided:
+	- topol.top
+	- file.itp (that must be indicated in the INPUT.dat with the keyword "itp_protein", containing the topology-data relative to the protein that must be investigated).
+It could be enough to provide only the topol.top file (no needed itp) at the condition that the topology is related exclusively to the protein that must be analyzed -no solvent-.
+
+b) the line relative to CAS must be: MUTATION RootName ResNumber ResType receptor MutName (receptor can be any thing, but it is important that something is written.)
+
+IMPORTANT: when using the option "protein_alone" in the xtc file provided to GMXPBSA the periodic boundary condition must be treated so to make the broken molecules whole.
+(Use: trjconv -pbc whole).
+
+Be careful to use this option! Free energy values are significant only when compared, so provide more files (mutants, folded/unfolded ...)
+
+
+8) Modified default values for keywords:
+
+keyword		old_default	new_default
+
+coulomb		coul		gmx
+precF		1		0
+linearized	n		y
+
+
+9) Many keywords have been added to allow more flexibility with the input files, with the APBS options and to set the option for the cluster. Here there is a list of all the added keywords.
+
+#keyword	default	meaning
+
+#Input-file related keywoords
+
+name_xtc	npt	name of the xtc input file
+name_tpr	npt	name of the tpr input file
+
+multichain      n	see above
+protein_alone   n	see above
+itp_protein		see above
+
+
+#APBS-related keywords
+
+extraspace	5	quantity to add (A°) for each side to get fine-grid dimensions
+coarsefactor	1.7	factor to get coarse-grid dimensions
+grid_spacing	0.5	fine mesh spacing
+sdie		80
+chgm		spl2
+srfm		smol
+srad		1.4
+swin		0.3
+sdens		10.0
+calcforce	no
+ion_ch_pos	1	positive ion charge in electron units
+ion_rad_pos	2.0	positive ion radius
+ion_conc_pos	0.15	positive ion concentration
+ion_ch_neg	-1	negative ion charge in electron units
+ion_rad_neg	2.0	negative ion radius
+ion_conc_neg	0.15	negative ion concentration
+Hsrfm		sacc	srfm for non-polar calculations
+Hpress		0.00	press for non-polar calculations
+Hgamma		0.0227  gamma for non-polar calculations
+Hdpos		0.20	dpos for non-polar calculations
+Hcalcforce	total	calcforce for non-polar calculations
+Hxgrid		0.1	xgrid for non-polar calculations
+Hygrid		0.1	ygrid for non-polar calculations
+Hzgrid		0.1	zgrid for non-polar calculations
+#for the keywords not explained refer to the APBS web site
+
+#CLUSTER-related keywords
+nodes		1
+mem		5GB
+option_clu
+option_clu2
+
+
+#when performing the calculations in a cluster with the PBS queue it use the command:
+##PBS -l select=$mnp:ncpus=$nodes:mem=$mem
