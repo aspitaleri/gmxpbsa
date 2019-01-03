@@ -1,4 +1,4 @@
-# gmxpbsa
+# gmxpbsa 2.1.2
 MM/PBSA binding free energy calculation
 MM/PBSA binding free energy calculation 
 
